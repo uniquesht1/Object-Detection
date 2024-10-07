@@ -1,80 +1,105 @@
-# RCNN Object Detection Model
+# Selective Search and RCNN Implementation
 
-This repository implements a **Region-based Convolutional Neural Network (RCNN)** for object detection using **PyTorch** and **selective search**. The model is trained to classify objects and localize bounding boxes in images.
+This repository demonstrates object detection using **Selective Search** for region proposals and **RCNN (Region-based Convolutional Neural Networks)** for object classification and localization.
 
-## Features
+## 1. Selective Search
 
-- **Selective Search**: To propose candidate regions from the input images.
-- **ResNet50 Backbone**: Used for feature extraction.
-- **Bounding Box Regression**: Localizes objects by predicting bounding box coordinates.
-- **Classification Head**: Classifies the objects detected in the bounding boxes.
-- **Model Training**: Custom training loop with support for batch processing and model evaluation.
-- **Inference Pipeline**: Includes preprocessing, forward pass, post-processing, and visualization.
+### Overview
+Selective Search generates object-like region proposals, which are later passed to an RCNN model for object detection. It segments the image into candidate regions based on pixel similarity.
 
-## Dependencies
+### Key Steps
+- **Image Preprocessing**: Load and convert the image.
+- **Selective Search**: Generate region proposals using multiple scales and size thresholds.
+- **Region Extraction**: Filter and extract relevant bounding box regions.
 
-- Python 3.x
-- PyTorch
-- OpenCV
-- pandas, numpy
-- tqdm
-- matplotlib
-- selectivesearch
+### Code Snippets
+- **Load Image**:
+    ```python
+    img = cv2.imread('test.jpg')
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    plt.imshow(img)
+    plt.axis('off')
+    plt.show()
+    ```
+- **Run Selective Search**:
+    ```python
+    imgs, regions = selectivesearch.selective_search(img, scale=100, min_size=50)
+    ```
+- **Extract Candidates**:
+    ```python
+    def extract_candidates(img):
+        _, regions = selectivesearch.selective_search(img, scale=100, min_size=50)
+        candidates = [r['rect'] for r in regions if valid_region(r)]
+        return candidates
+    ```
 
-Install dependencies using:
+## 2. RCNN (Region-based Convolutional Neural Networks)
 
-```bash
-pip install torch torchvision opencv-python pandas numpy tqdm matplotlib selectivesearch
-```
+### Overview
+RCNN classifies object regions proposed by Selective Search and refines bounding boxes using regression. The backbone model (ResNet50) extracts features, while two heads handle classification and box regression.
 
-## How to Use
+### Key Steps
+- **Data Loading**: Custom dataset loader for images and bounding boxes.
+- **Model Architecture**: ResNet50 backbone, classification, and regression heads.
+- **Training and Testing**: Loss computation for classification and bounding box regression, using IoU and Non-Maximum Suppression (NMS).
 
-1. **Prepare Dataset**:
-   * Update the `image_paths` and `csv_path` to point to your dataset of images and annotations (CSV file).
-2. **Train the Model**:
-   * Run the notebook to load and preprocess the dataset, initialize the model, and start training.
-3. **Save the Model**:
-   * After training, save the model or its `state_dict` for future inference.
-4. **Run Inference**:
-   * Use the `InferenceRCNN` class to perform object detection on new images using the trained model.
+### Code Snippets
+- **RCNN Model**:
+    ```python
+    class RCNN(nn.Module):
+        def __init__(self, backbone, n_classes):
+            super().__init__()
+            self.backbone = backbone
+            self.classification_head = nn.Linear(2048, n_classes)
+            self.bbox_regression_head = nn.Sequential(nn.Linear(2048, 512), nn.ReLU(), nn.Linear(512, 4), nn.Tanh())
+    ```
+- **Training**:
+    ```python
+    for inputs, labels, deltas in train_dataloader:
+        _labels, _deltas, loss, _, _ = train_batch(rcnn, optimizer, inputs, labels, deltas)
+    ```
+- **Prediction**:
+    ```python
+    def predict(inputs):
+        with torch.no_grad():
+            labels, deltas = rcnn(inputs)
+            conf, clss = torch.softmax(labels, -1).max(-1)
+        return conf, clss, deltas
+    ```
 
-Example:
+## How to Run
 
-```python
-inference = InferenceRCNN(test, device, background_class, preprocess, nms, extract_candidates)
-inference('path_to_image.jpg', display=True)
-```
+### Prerequisites
+- Python 3.x, OpenCV, PyTorch, Selective Search, TorchVision.
 
-## Example Usage
+### Instructions
+1. Clone the repo:
+    ```bash
+    git clone https://github.com/uniquesht1/Object-Detection.git
+    ```
+2. Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+3. Run the Selective Search:
 
-To train the model:
+4. Train the RCNN:
 
-```python
-rcnn = RCNN(backbone, n_classes=len(unique_labels)).to(device)
-optimizer = torch.optim.SGD(rcnn.parameters(), lr=learning_rate)
-train_batch(rcnn, optimizer, inputs, labels, deltas)
-```
+5. Test predictions:
 
-To run inference after loading the model:
 
-```python
-test = torch.load('model.pth', map_location=device)
-test.eval()
-inference = InferenceRCNN(test, device, background_class, preprocess, nms, extract_candidates)
-inference('test_image.jpg', display=True)
-```
+## Results
+- Selective Search generates candidate regions, and the RCNN classifies objects and refines their bounding boxes using regression and NMS.
 
-## Model Architecture
+### Example Output
+- Bounding box from Selective Search:
+  ![image](https://github.com/user-attachments/assets/fbea7e3b-1c28-4289-9a41-c108a41f35d4)
 
-* **Backbone**: ResNet50 (pretrained on ImageNet).
-* **Classification Head**: Linear layer for class prediction.
-* **Localization Head**: Regression head to predict bounding box coordinates.
+- Original image and with bounding boxes from RCNN predictions:
+  ![image](https://github.com/user-attachments/assets/c7d9b37f-4a03-40bc-b02a-60a56e2eb3fc)
 
-## Project Structure
-
-* **data/**: Folder containing images and CSV files for training.
-* **notebook.ipynb**: Main notebook with the full pipeline (data loading, model definition, training, and inference).
-* **model.pth**: Trained model saved using `torch.save()` (not included by default).
+- Image with bounding box from customly trained model.pth. It has low accuracy :)
+  ![image](https://github.com/user-attachments/assets/aa947ff0-eebd-458c-9bba-98f22cefa9e2)
 
 ## License
 
